@@ -320,8 +320,8 @@ if (!$columns && support("table")) {
 		} else {
 			$backward_keys = $adminer->backwardKeys($TABLE, $table_name);
 
-			echo "<div class='scrollable'>";
-			echo "<table id='table' cellspacing='0' class='nowrap checkable'>";
+			echo "<div class='scrollable table-responsive'>";
+			echo "<table id='table' cellspacing='0' class='nowrap checkable table'>";
 			echo script("mixin(gid('table'), {onclick: tableClick, ondblclick: partialArg(tableClick, true), onkeydown: editingKeydown});");
 			echo "<thead><tr>" . (!$group && $select
 				? ""

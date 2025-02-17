@@ -1,12 +1,38 @@
 <?php
-class Adminer {
-	var $operators = array("<=", ">=");
-	var $operator_like = null;
-	var $operator_regexp = null;
-	var $_values = array();
+
+namespace Adminer;
+
+class Adminer extends AdminerBase
+{
+	private $values = [];
+
+	public function setOperators(?array $operators, ?string $likeOperator, ?string $regexpOperator): void
+	{
+		//
+	}
+
+	public function removeOperator(string $operator): void
+	{
+		//
+	}
+
+	public function getOperators(): ?array
+	{
+		return ["<=", ">="];
+	}
+
+	public function getLikeOperator(): ?string
+	{
+		return null;
+	}
+
+	public function getRegexpOperator(): ?string
+	{
+		return null;
+	}
 
 	function name() {
-		return "<a id='h1' href='" . h(HOME_URL) . "'>EditorNeo</a>";
+		return "<a id='h1' href='" . h(HOME_URL) . "'>" . lang('Editor') . "</a>";
 	}
 
 	//! driver, ns
@@ -43,14 +69,6 @@ class Adminer {
 		}
 	}
 
-	function schemas() {
-		return schemas();
-	}
-
-	function databases($flush = true) {
-		return get_databases($flush);
-	}
-
 	function queryTimeout() {
 		return 5;
 	}
@@ -66,21 +84,12 @@ class Adminer {
 		return true;
 	}
 
-	function css() {
-		$return = array();
-		$filename = "adminer.css";
-		if (file_exists($filename)) {
-			$return[] = $filename;
-		}
-		return $return;
-	}
-
 	function loginForm() {
-		echo "<table cellspacing='0' class='layout'>\n";
-		echo $this->loginFormField('username', '<tr><th>' . lang('Username') . '<td>', '<input type="hidden" name="auth[driver]" value="mysql"><input name="auth[username]" id="username" value="' . h($_GET["username"]) . '" autocomplete="username" autocapitalize="off">');
-		echo $this->loginFormField('password', '<tr><th>' . lang('Password') . '<td>', '<input type="password" name="auth[password]" autocomplete="current-password">' . "\n");
+		echo "<table class='layout'>\n";
+		echo $this->loginFormField('username', '<tr><th>' . lang('Username') . '<td>', '<input type="hidden" name="auth[driver]" value="mysql"><input class="input" name="auth[username]" id="username" value="' . h($_GET["username"]) . '" autocomplete="username" autocapitalize="off">' . script("focus(gid('username'));"));
+		echo $this->loginFormField('password', '<tr><th>' . lang('Password') . '<td>', '<input type="password" class="input" name="auth[password]" autocomplete="current-password">' . "\n");
 		echo "</table>\n";
-		echo "<p><input type='submit' value='" . lang('Login') . "'>\n";
+		echo "<p><input type='submit' class='button' value='" . lang('Login') . "'>\n";
 		echo checkbox("auth[permanent]", 1, $_COOKIE["adminer_permanent"], lang('Permanent login')) . "\n";
 	}
 
@@ -103,7 +112,7 @@ class Adminer {
 	function selectLinks($tableStatus, $set = "") {
 		$TABLE = $tableStatus["Name"];
 		if ($set !== null) {
-			echo '<p class="tabs"><a href="' . h(ME . 'edit=' . urlencode($TABLE) . $set) . '">' . lang('New item') . "</a>\n";
+			echo '<p class="tabs"><a href="', h(ME . 'edit=' . urlencode($TABLE) . $set), '">', icon("item-add"), lang('New item'), "</a>\n";
 		}
 	}
 
@@ -147,13 +156,17 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 				foreach ($cols as $column => $val) {
 					$link .= "&set" . urlencode("[" . bracket_escape($column) . "]") . "=" . urlencode($row[$val]);
 				}
-				echo "<a href='" . h($link) . "' title='" . lang('New item') . "'>+</a> ";
+				echo "<a href='" . h($link) . "' title='" . lang('New item') . "'>", icon_solo("add"), "</a> ";
 			}
 		}
 	}
 
 	function selectQuery($query, $start, $failed = false) {
 		return "<!--\n" . str_replace("--", "--><!-- ", $query) . "\n(" . format_time($start) . ")\n-->\n";
+	}
+
+	public function sqlCommandQuery($query)
+	{
 	}
 
 	function rowDescription($table) {
@@ -169,14 +182,14 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 	function rowDescriptions($rows, $foreignKeys) {
 		$return = $rows;
 		foreach ($rows[0] as $key => $val) {
-			if (list($table, $id, $name) = $this->_foreignColumn($foreignKeys, $key)) {
+			if (list($table, $id, $name) = $this->foreignColumn($foreignKeys, $key)) {
 				// find all used ids
 				$ids = array();
 				foreach ($rows as $row) {
 					$ids[$row[$key]] = q($row[$key]);
 				}
 				// uses constant number of queries to get the descriptions, join would be complex, multiple queries would be slow
-				$descriptions = $this->_values[$table];
+				$descriptions = $this->values[$table];
 				if (!$descriptions) {
 					$descriptions = get_key_vals("SELECT $id, $name FROM " . table($table) . " WHERE $id IN (" . implode(", ", $ids) . ")");
 				}
@@ -203,13 +216,13 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 				$return = "<img src='$link' alt='$return'>";
 			}
 		}
-		if (like_bool($field) && $return != "") { // bool
+		if ($this->looksLikeBool($field) && $return != "") { // bool
 			$return = (preg_match('~^(1|t|true|y|yes|on)$~i', $val) ? lang('yes') : lang('no'));
 		}
 		if ($link) {
 			$return = "<a href='$link'" . (is_web_url($link) ? target_blank() : "") . ">$return</a>";
 		}
-		if (!$link && !like_bool($field) && preg_match(number_type(), $field["type"])) {
+		if (!$link && !$this->looksLikeBool($field) && preg_match(number_type(), $field["type"])) {
 			$return = "<div class='number'>$return</div>"; // Firefox doesn't support <colgroup>
 		} elseif (preg_match('~date~', $field["type"])) {
 			$return = "<div class='datetime'>$return</div>";
@@ -224,11 +237,23 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		return $val;
 	}
 
-	function selectColumnsPrint($select, $columns) {
+	public function tableStructurePrint($fields)
+	{
+	}
+
+	public function tablePartitionsPrint($partition_info)
+	{
+	}
+
+	public function tableIndexesPrint($indexes)
+	{
+	}
+
+	function selectColumnsPrint(array $select, array $columns) {
 		// can allow grouping functions by indexes
 	}
 
-	function selectSearchPrint($where, $columns, $indexes) {
+	function selectSearchPrint(array $where, array $columns, array $indexes) {
 		$where = (array) $_GET["where"];
 		echo '<fieldset id="fieldset-search"><legend>' . lang('Search') . "</legend><div>\n";
 		$keys = array();
@@ -239,23 +264,23 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		$fields = fields($_GET["select"]);
 		foreach ($columns as $name => $desc) {
 			$field = $fields[$name];
-			if (preg_match("~enum~", $field["type"]) || like_bool($field)) { //! set - uses 1 << $i and FIND_IN_SET()
+			if (preg_match("~enum~", $field["type"]) || $this->looksLikeBool($field)) { //! set - uses 1 << $i and FIND_IN_SET()
 				$key = $keys[$name];
 				$i--;
 				echo "<div>" . h($desc) . "<input type='hidden' name='where[$i][col]' value='" . h($name) . "'>:";
-				echo (like_bool($field)
-					? " <select name='where[$i][val]'>" . optionlist(array("" => "", lang('no'), lang('yes')), $where[$key]["val"], true) . "</select>"
-					: enum_input("checkbox", " name='where[$i][val][]'", $field, (array) $where[$key]["val"], ($field["null"] ? 0 : null))
+				echo ($this->looksLikeBool($field)
+					? " <select name='where[$i][val]'>" . optionlist(array("" => "", lang('no'), lang('yes')), $where[$key]["val"] ?? null, true) . "</select>"
+					: enum_input("checkbox", " name='where[$i][val][]'", $field, (array) ($where[$key]["val"] ?? []), ($field["null"] ? 0 : null))
 				);
 				echo "</div>\n";
 				unset($columns[$name]);
-			} elseif (is_array($options = $this->_foreignKeyOptions($_GET["select"], $name))) {
+			} elseif (is_array($options = $this->foreignKeyOptions($_GET["select"], $name))) {
 				if ($fields[$name]["null"]) {
 					$options[0] = '(' . lang('empty') . ')';
 				}
 				$key = $keys[$name];
 				$i--;
-				echo "<div>" . h($desc) . "<input type='hidden' name='where[$i][col]' value='" . h($name) . "'><input type='hidden' name='where[$i][op]' value='='>: <select name='where[$i][val]'>" . optionlist($options, $where[$key]["val"], true) . "</select></div>\n";
+				echo "<div>" . h($desc) . "<input type='hidden' name='where[$i][col]' value='" . h($name) . "'><input type='hidden' name='where[$i][op]' value='='>: <select name='where[$i][val]'>" . optionlist($options, $where[$key]["val"] ?? null, true) . "</select></div>\n";
 				unset($columns[$name]);
 			}
 		}
@@ -263,25 +288,26 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		foreach ($where as $val) {
 			if (($val["col"] == "" || $columns[$val["col"]]) && "$val[col]$val[val]" != "") {
 				echo "<div><select name='where[$i][col]'><option value=''>(" . lang('anywhere') . ")" . optionlist($columns, $val["col"], true) . "</select>";
-				echo html_select("where[$i][op]", array(-1 => "") + $this->operators, $val["op"]);
-				echo "<input type='search' name='where[$i][val]' value='" . h($val["val"]) . "'>" . script("mixin(qsl('input'), {onkeydown: selectSearchKeydown, onsearch: selectSearchSearch});", "");
-				echo " <input type='image' src='../adminer/static/cross.gif' class='jsonly icon remove' title='" . h(lang('Remove')) . "' alt='x'>" . script('qsl("#fieldset-search .remove").onclick = selectRemoveRow;', "");
+				echo html_select("where[$i][op]", array(-1 => "") + $this->getOperators(), $val["op"]);
+				echo "<input type='search' class='input' name='where[$i][val]' value='" . h($val["val"]) . "'>" . script("mixin(qsl('input'), {onkeydown: selectSearchKeydown, onsearch: selectSearchSearch});", "");
+				echo " <button class='button light remove jsonly' title='" . h(lang('Remove')) . "'>", icon_solo("remove"), "</button>";
+				echo script('qsl("#fieldset-search .remove").onclick = selectRemoveRow;', "");
 				echo "</div>\n";
 				$i++;
 			}
 		}
 		echo "<div><select name='where[$i][col]'><option value=''>(" . lang('anywhere') . ")" . optionlist($columns, null, true) . "</select>";
 		echo script("qsl('select').onchange = selectAddRow;", "");
-		echo html_select("where[$i][op]", array(-1 => "") + $this->operators);
-		echo "<input type='search' name='where[$i][val]'>";
+		echo html_select("where[$i][op]", array(-1 => "") + $this->getOperators());
+		echo "<input type='search' class='input' name='where[$i][val]'>";
 		echo script("mixin(qsl('input'), {onchange: function () { this.parentNode.firstChild.onchange(); }, onsearch: selectSearchSearch});");
-		echo " <input type='image' src='../adminer/static/cross.gif' class='jsonly icon remove' title='" . h(lang('Remove')) . "' alt='x'>";
+		echo " <button class='button light remove jsonly' title='" . h(lang('Remove')) . "'>", icon_solo("remove"), "</button>";
 		echo script('qsl("#fieldset-search .remove").onclick = selectRemoveRow;', "");
 		echo "</div>";
 		echo "</div></fieldset>\n";
 	}
 
-	function selectOrderPrint($order, $columns, $indexes) {
+	function selectOrderPrint(array $order, array $columns, array $indexes) {
 		//! desc
 		$orders = array();
 		foreach ($indexes as $key => $index) {
@@ -295,7 +321,7 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		}
 		if ($orders) {
 			echo '<fieldset><legend>' . lang('Sort') . "</legend><div>";
-			echo "<select name='index_order'>" . optionlist(array("" => "") + $orders, ($_GET["order"][0] != "" ? "" : $_GET["index_order"]), true) . "</select>";
+			echo "<select name='index_order'>" . optionlist(array("" => "") + $orders, (($_GET["order"][0] ?? null) != "" ? "" : $_GET["index_order"]), true) . "</select>";
 			echo "</div></fieldset>\n";
 		}
 		if ($_GET["order"]) {
@@ -306,10 +332,11 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		}
 	}
 
-	function selectLimitPrint($limit) {
-		echo "<fieldset><legend>" . lang('Limit') . "</legend><div>"; // <div> for easy styling
-		echo html_select("limit", array("", "256", "100"), $limit);
-		echo "</div></fieldset>\n";
+	public function selectLimitPrint(?int $limit): void
+	{
+		echo "<fieldset><legend>" . lang('Limit') . "</legend><div>", // <div> for easy styling
+			html_select("limit", ["", "256", "100"], (string)$limit),
+			"</div></fieldset>\n";
 	}
 
 	function selectLengthPrint($text_length) {
@@ -317,7 +344,7 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 
 	function selectActionPrint($indexes) {
 		echo "<fieldset><legend>" . lang('Action') . "</legend><div>";
-		echo "<input type='submit' value='" . lang('Select') . "'>";
+		echo "<input type='submit' class='button' value='" . lang('Select') . "'>";
 		echo "</div></fieldset>\n";
 	}
 
@@ -334,13 +361,13 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 			print_fieldset("email", lang('E-mail'), $_POST["email_append"]);
 			echo "<div>";
 			echo script("qsl('div').onkeydown = partialArg(bodyKeydown, 'email');");
-			echo "<p>" . lang('From') . ": <input name='email_from' value='" . h($_POST ? $_POST["email_from"] : $_COOKIE["adminer_email"]) . "'>\n";
-			echo lang('Subject') . ": <input name='email_subject' value='" . h($_POST["email_subject"]) . "'>\n";
+			echo "<p>" . lang('From') . ": <input class='input' name='email_from' value='" . h($_POST ? $_POST["email_from"] : $_COOKIE["adminer_email"]) . "'>\n";
+			echo lang('Subject') . ": <input class='input' name='email_subject' value='" . h($_POST["email_subject"]) . "'>\n";
 			echo "<p><textarea name='email_message' rows='15' cols='75'>" . h($_POST["email_message"] . ($_POST["email_append"] ? '{$' . "$_POST[email_addition]}" : "")) . "</textarea>\n";
-			echo "<p>" . script("qsl('p').onkeydown = partialArg(bodyKeydown, 'email_append');", "") . html_select("email_addition", $columns, $_POST["email_addition"]) . "<input type='submit' name='email_append' value='" . lang('Insert') . "'>\n"; //! JavaScript
+			echo "<p>" . script("qsl('p').onkeydown = partialArg(bodyKeydown, 'email_append');", "") . html_select("email_addition", $columns, $_POST["email_addition"]) . "<input type='submit' class='button' name='email_append' value='" . lang('Insert') . "'>\n"; //! JavaScript
 			echo "<p>" . lang('Attachments') . ": <input type='file' name='email_files[]'>" . script("qsl('input').onchange = emailFileChange;");
 			echo "<p>" . (count($emailFields) == 1 ? '<input type="hidden" name="email_field" value="' . h(key($emailFields)) . '">' : html_select("email_field", $emailFields));
-			echo "<input type='submit' name='email' value='" . lang('Send') . "'>" . confirm();
+			echo "<input type='submit' class='button' name='email' value='" . lang('Send') . "'>" . confirm();
 			echo "</div>\n";
 			echo "</div></fieldset>\n";
 		}
@@ -374,7 +401,7 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 							$value = $this->processInput($field, (!$op && $text_type && preg_match('~^[^%]+$~', $val) ? "%$val%" : $val));
 
 							$conds[] = $driver->convertSearch($name, $where, $field) . ($value == "NULL" ? " IS" . ($op == ">=" ? " NOT" : "") . " $value"
-								: (in_array($op, $this->operators) || $op == "=" ? " $op $value"
+								: (in_array($op, $this->getOperators()) || $op == "=" ? " $op $value"
 								: ($text_type ? " LIKE $value"
 								: " IN (" . str_replace(",", "', '", $value) . ")"
 							)));
@@ -421,10 +448,6 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		return array();
 	}
 
-	function selectLimitProcess() {
-		return (isset($_GET["limit"]) ? $_GET["limit"] : "50");
-	}
-
 	function selectLengthProcess() {
 		return "100";
 	}
@@ -440,10 +463,10 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 				$subject = $_POST["email_subject"];
 				$message = $_POST["email_message"];
 				preg_match_all('~\{\$([a-z0-9_]+)\}~i', "$subject.$message", $matches); // allows {$name} in subject or message
-				$rows = get_rows("SELECT DISTINCT $field" . ($matches[1] ? ", " . implode(", ", array_map('idf_escape', array_unique($matches[1]))) : "") . " FROM " . table($_GET["select"])
+				$rows = get_rows("SELECT DISTINCT $field" . ($matches[1] ? ", " . implode(", ", array_map('Adminer\idf_escape', array_unique($matches[1]))) : "") . " FROM " . table($_GET["select"])
 					. " WHERE $field IS NOT NULL AND $field != ''"
 					. ($where ? " AND " . implode(" AND ", $where) : "")
-					. ($_POST["all"] ? "" : " AND ((" . implode(") OR (", array_map('where_check', (array) $_POST["check"])) . "))")
+					. ($_POST["all"] ? "" : " AND ((" . implode(") OR (", array_map('Adminer\where_check', (array) $_POST["check"])) . "))")
 				);
 				$fields = fields($_GET["select"]);
 				foreach ($this->rowDescriptions($rows, $foreignKeys) as $row) {
@@ -452,7 +475,7 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 						$replace['{$' . "$val}"] = $this->editVal($row[$val], $fields[$val]);
 					}
 					$email = $row[$_POST["email_field"]];
-					if (is_mail($email) && send_mail($email, strtr($subject, $replace), strtr($message, $replace), $_POST["email_from"], $_FILES["email_files"])) {
+					if (is_mail($email) && $this->sendEmail($email, strtr($subject, $replace), strtr($message, $replace), $_POST["email_from"], $_FILES["email_files"])) {
 						$sent++;
 					}
 				}
@@ -461,10 +484,6 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 			redirect(remove_from_uri(), lang('%d e-mail(s) have been sent.', $sent));
 		}
 		return false;
-	}
-
-	function selectQueryBuild($select, $where, $group, $order, $limit, $page) {
-		return "";
 	}
 
 	function messageQuery($query, $time, $failed = false) {
@@ -479,7 +498,7 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 		if ($field["null"] && preg_match('~blob~', $field["type"])) {
 			$return["NULL"] = lang('empty');
 		}
-		$return[""] = ($field["null"] || $field["auto_increment"] || like_bool($field) ? "" : "*");
+		$return[""] = ($field["null"] || $field["auto_increment"] || $this->looksLikeBool($field) ? "" : "*");
 		//! respect driver
 		if (preg_match('~date|time~', $field["type"])) {
 			$return["now"] = lang('now');
@@ -496,18 +515,18 @@ ORDER BY ORDINAL_POSITION", null, "") as $row) { //! requires MySQL 5
 				. enum_input("radio", $attrs, $field, ($value || isset($_GET["select"]) ? $value : 0), ($field["null"] ? "" : null))
 			;
 		}
-		$options = $this->_foreignKeyOptions($table, $field["field"], $value);
+		$options = $this->foreignKeyOptions($table, $field["field"], $value);
 		if ($options !== null) {
 			return (is_array($options)
 				? "<select$attrs>" . optionlist($options, $value, true) . "</select>"
-				: "<input value='" . h($value) . "'$attrs class='hidden'>"
-					. "<input value='" . h($options) . "' class='jsonly'>"
+				: "<input value='" . h($value) . "'$attrs class='input hidden'>"
+					. "<input value='" . h($options) . "' class='input jsonly'>"
 					. "<div></div>"
 					. script("qsl('input').oninput = partial(whisper, '" . ME . "script=complete&source=" . urlencode($table) . "&field=" . urlencode($field["field"]) . "&value=');
 qsl('div').onclick = whisperClick;", "")
 			);
 		}
-		if (like_bool($field)) {
+		if ($this->looksLikeBool($field)) {
 			return '<input type="checkbox" value="1"' . (preg_match('~^(1|t|true|y|yes|on)$~i', $value) ? ' checked' : '') . "$attrs>";
 		}
 		$hint = "";
@@ -523,7 +542,7 @@ qsl('div').onclick = whisperClick;", "")
 				. "$attrs> ($hint)"; //! maxlength
 		}
 		if (preg_match('~_(md5|sha1)$~i', $field["field"])) {
-			return "<input type='password' value='" . h($value) . "'$attrs>";
+			return "<input type='password' class='input' value='" . h($value) . "'$attrs>";
 		}
 		return '';
 	}
@@ -532,7 +551,10 @@ qsl('div').onclick = whisperClick;", "")
 		return (preg_match('~\s+(\[.*\])$~', ($field["comment"] != "" ? $field["comment"] : $field["field"]), $match) ? h(" $match[1]") : '');
 	}
 
-	function processInput($field, $value, $function = "") {
+	function processInput(?array $field, $value, $function = "") {
+		if (!$field) {
+			return q($value);
+		}
 		if ($function == "now") {
 			return "$function()";
 		}
@@ -541,7 +563,7 @@ qsl('div').onclick = whisperClick;", "")
 			$return = ($match["p1"] != "" ? $match["p1"] : ($match["p2"] != "" ? ($match["p2"] < 70 ? 20 : 19) . $match["p2"] : gmdate("Y"))) . "-$match[p3]$match[p4]-$match[p5]$match[p6]" . end($match);
 		}
 		$return = ($field["type"] == "bit" && preg_match('~^[0-9]+$~', $value) ? $return : q($return));
-		if ($value == "" && like_bool($field)) {
+		if ($value == "" && $this->looksLikeBool($field)) {
 			$return = "'0'";
 		} elseif ($value == "" && ($field["null"] || !preg_match('~char|text~', $field["type"]))) {
 			$return = "NULL";
@@ -600,20 +622,22 @@ qsl('div').onclick = whisperClick;", "")
 
 	function navigation($missing) {
 		global $VERSION;
+
+		$last_version = $_COOKIE["adminer_version"] ?? null;
 ?>
 
 <h1>
-	<?php echo $this->name(); ?>
+	<?= $this->name(); ?>
 
 	<?php if ($missing != "auth"): ?>
 		<span class="version">
-			<?php echo $VERSION; ?>
-			<a href="https://github.com/adminneo-org/adminneo/releases"<?php echo target_blank(); ?> id="version">
-				<?php echo (version_compare($VERSION, $_COOKIE["adminer_version"]) < 0 ? h($_COOKIE["adminer_version"]) : ""); ?>
+			<?= h($VERSION); ?>
+			<a href="https://github.com/pematon/adminer/releases"<?= target_blank(); ?> id="version">
+				<?= ($this->config->isVersionVerificationEnabled() && $last_version && version_compare($VERSION, $last_version) < 0 ? h($last_version) : ""); ?>
 			</a>
 		</span>
 		<?php
-		if (!isset($_COOKIE["adminer_version"]) && version_compare(PHP_VERSION, 7.1) >= 0) {
+		if ($this->config->isVersionVerificationEnabled() && !$last_version) {
 			echo script("verifyVersion('" . js_escape(ME) . "', '" . get_token() . "');");
 		}
 		?>
@@ -627,20 +651,22 @@ qsl('div').onclick = whisperClick;", "")
 				foreach ($servers[""] as $username => $password) {
 					if ($password !== null) {
 						if ($first) {
-							echo "<ul id='logins'>";
-							echo script("mixin(gid('logins'), {onmouseover: menuOver, onmouseout: menuOut});");
+							echo "<nav id='logins'><menu>";
 							$first = false;
 						}
-						echo "<li><a href='" . h(auth_url($vendor, "", $username)) . "'>" . ($username != "" ? h($username) : "<i>" . lang('empty') . "</i>") . "</a>\n";
+						echo "<li><a href='" . h(auth_url($vendor, "", $username)) . "'>" . ($username != "" ? h($username) : "<i>" . lang('empty') . "</i>") . "</a></li>\n";
 					}
 				}
+			}
+			if (!$first) {
+				echo "</menu></nav>\n";
 			}
 		} else {
 			$this->databasesPrint($missing);
 			if ($missing != "db" && $missing != "ns") {
 				$table_status = table_status('', true);
 				if (!$table_status) {
-					echo "<p class='message'>" . lang('No tables.') . "\n";
+					echo "<p class='message'>" . lang('No tables.') . "</p>\n";
 				} else {
 					$this->printTablesFilter();
 					$this->tablesPrint($table_status);
@@ -652,18 +678,8 @@ qsl('div').onclick = whisperClick;", "")
 	function databasesPrint($missing) {
 	}
 
-	function printTablesFilter()
-	{
-		global $adminer;
-
-		echo "<div class='tables-filter jsonly'>"
-			. "<input id='tables-filter' autocomplete='off' placeholder='" . lang('Table') . "'>"
-			. script("initTablesFilter(" . json_encode($adminer->database()) . ");")
-			. "</div>\n";
-	}
-
-	function tablesPrint($tables) {
-		echo "<ul id='tables'>" . script("mixin(gid('tables'), {onmouseover: menuOver, onmouseout: menuOut});");
+	function tablesPrint(array $tables) {
+		echo "<nav id='tables'><menu>";
 
 		foreach ($tables as $row) {
 			// Skip views and tables without a name.
@@ -674,20 +690,20 @@ qsl('div').onclick = whisperClick;", "")
 			$active = $_GET["select"] == $row["Name"] || $_GET["edit"] == $row["Name"];
 
 			echo '<li><a href="' . h(ME) . 'select=' . urlencode($row["Name"]) . '"'
-				. bold($active, "select")
-				. " title='" . lang('Select data') . "'  data-main='true'>$name</a></li>\n";
+				. bold($active, "primary")
+				. " data-primary='true'>$name</a></li>\n";
 		}
 
-		echo "</ul>\n";
+		echo "</menu></nav>\n";
 	}
 
-	function _foreignColumn($foreignKeys, $column) {
+	public function foreignColumn($foreignKeys, $column): ?array {
 		foreach ((array) $foreignKeys[$column] as $foreignKey) {
 			if (count($foreignKey["source"]) == 1) {
 				$name = $this->rowDescription($foreignKey["table"]);
 				if ($name != "") {
 					$id = idf_escape($foreignKey["target"][0]);
-					return array($foreignKey["table"], $id, $name);
+					return [$foreignKey["table"], $id, $name];
 				}
 			}
 		}
@@ -695,10 +711,10 @@ qsl('div').onclick = whisperClick;", "")
 		return null;
 	}
 
-	function _foreignKeyOptions($table, $column, $value = null) {
+	private function foreignKeyOptions($table, $column, $value = null) {
 		global $connection;
-		if (list($target, $id, $name) = $this->_foreignColumn(column_foreign_keys($table), $column)) {
-			$return = &$this->_values[$target];
+		if (list($target, $id, $name) = $this->foreignColumn(column_foreign_keys($table), $column)) {
+			$return = &$this->values[$target];
 			if ($return === null) {
 				$table_status = table_status($target);
 				$return = ($table_status["Rows"] > 1000 ? "" : array("" => "") + get_key_vals("SELECT $id, $name FROM " . table($target) . " ORDER BY 2"));
@@ -710,4 +726,51 @@ qsl('div').onclick = whisperClick;", "")
 		}
 	}
 
+	/**
+	 * Checks whether the column looks like boolean.
+	 *
+	 * @param array $field Single field returned from fields().
+	 */
+	protected function looksLikeBool(array $field): bool
+	{
+		return preg_match("~bool|(tinyint|bit)\\(1\\)~", $field["full_type"]);
+	}
+
+	/**
+	 * Sends e-mail in UTF-8.
+	 */
+	protected function sendEmail(string $email, string $subject, string $message, string $from = "", array $files = []):bool
+	{
+		$eol = "\r\n";
+		$message = str_replace("\n", $eol, wordwrap(str_replace("\r", "", "$message\n")));
+		$boundary = uniqid("boundary");
+		$attachments = "";
+
+		foreach ((array) $files["error"] as $key => $val) {
+			if ($val) {
+				continue;
+			}
+
+			$attachments .= "--$boundary$eol"
+				. "Content-Type: " . str_replace("\n", "", $files["type"][$key]) . $eol
+				. "Content-Disposition: attachment; filename=\"" . preg_replace('~["\n]~', '', $files["name"][$key]) . "\"$eol"
+				. "Content-Transfer-Encoding: base64$eol$eol"
+				. chunk_split(base64_encode(file_get_contents($files["tmp_name"][$key])), 76, $eol) . $eol;
+		}
+
+		$beginning = "";
+		$headers = "Content-Type: text/plain; charset=utf-8$eol" . "Content-Transfer-Encoding: 8bit";
+		if ($attachments) {
+			$attachments .= "--$boundary--$eol";
+			$beginning = "--$boundary$eol$headers$eol$eol";
+			$headers = "Content-Type: multipart/mixed; boundary=\"$boundary\"";
+		}
+		$headers .= $eol . "MIME-Version: 1.0$eol" . "X-Mailer: Adminer Editor"
+			. ($from ? $eol . "From: " . str_replace("\n", "", $from) : ""); //! should escape display name
+
+		// iconv_mime_encode requires iconv, imap_8bit requires IMAP extension
+		$subject = "=?UTF-8?B?" . base64_encode($subject) . "?="; //! split long lines
+
+		return mail($email, $subject, $beginning . $message . $attachments, $headers);
+	}
 }

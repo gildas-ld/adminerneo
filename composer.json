@@ -32,8 +32,7 @@
         "php": "5.6 - 8.4",
         "ext-pdo": "*",
         "ext-json": "*",
-        "vrana/jush": "2.0.*",
-        "vrana/jsshrink": "@dev"
+        "tedivm/jshrink": "^1.7"
     },
     "suggest": {
         "ext-zlib": "Allows to export databases in compressed gzip (.gz) files",
@@ -54,15 +53,6 @@
     },
     "scripts": {
         "compile": "php compile.php"
-    },
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/peterpp/jush.git"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/peterpp/js-shrink.git"
-        }
-    ]
+    }
+    
 }

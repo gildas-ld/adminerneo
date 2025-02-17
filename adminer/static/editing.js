@@ -194,7 +194,7 @@ function selectFieldChange() {
 		}
 		return ok;
 	})();
-	setHtml('noindex', (ok ? '' : '!'));
+    setHtml('noindex, nofollow', (ok ? '' : '!'));
 }
 
 

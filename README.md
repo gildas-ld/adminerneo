@@ -49,7 +49,7 @@ php compile.php editor <drivers> <languages>
 For example:
 ```shell
 php compile.php pgsql cs
-php compile.php mysql,pgsql en,de,cs,sk
+php compile.php mongo,mssql,mysql,oracle,pgsql,sqlite fr,en
 ```
 
 [Available drivers](adminer/drivers), 

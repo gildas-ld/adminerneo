@@ -3,6 +3,13 @@
 /** Pretty print JSON values in edit
 */
 class AdminerPrettyJsonColumn {
+	/** @var AdminerPlugin */
+	protected $adminer;
+
+	public function __construct($adminer) {
+		$this->adminer = $adminer;
+	}
+
 	private function _testJson($value) {
 		if ((substr($value, 0, 1) == '{' || substr($value, 0, 1) == '[') && ($json = json_decode($value, true))) {
 			return $json;
@@ -18,7 +25,7 @@ class AdminerPrettyJsonColumn {
 <textarea $attrs cols="50" rows="20">$jsonText</textarea>
 HTML;
 		}
-		return null;
+		return '';
 	}
 
 	function processInput($field, $value, $function = '') {
@@ -28,6 +35,6 @@ HTML;
 				$value = json_encode($json);
 			}
 		}
-		return adminer()->_callParent('processInput', array($field, $value, $function));
+		return $this->adminer->_callParent('processInput', array($field, $value, $function));
 	}
 }

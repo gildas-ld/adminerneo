@@ -31,7 +31,7 @@ function page_header($title, $error = "", $breadcrumb = [], $title2 = "") {
 <!DOCTYPE html>
 <html lang="<?php echo $LANG; ?>" dir="<?php echo lang('ltr'); ?>">
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<meta name="robots" content="noindex">
+<meta name="robots" content="noindex, nofollow, nosnippet, noarchive, notranslate">
 <title><?php echo $title_page; ?></title>
 <link rel="stylesheet" type="text/css" href="../adminer/static/default.css?<?php echo filemtime("../adminer/static/default.css"); ?>">
 <?php echo script_src("../adminer/static/functions.js?" . filemtime("../adminer/static/functions.js")); ?>

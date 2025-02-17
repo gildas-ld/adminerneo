@@ -1,6 +1,10 @@
 #!/usr/bin/env php
 <?php
-function adminer_errors($errno, $errstr) {
+
+include('vendor/autoload.php');
+
+function adminer_errors($errno, $errstr)
+{
 	return !!preg_match('~^(Trying to access array offset on value of type null|Undefined array key)~', $errstr);
 }
 
@@ -9,7 +13,6 @@ set_error_handler('adminer_errors', E_WARNING);
 
 include dirname(__FILE__) . "/adminer/include/debug.inc.php";
 include dirname(__FILE__) . "/adminer/include/version.inc.php";
-include dirname(__FILE__) . "/vendor/vrana/jsshrink/jsShrink.php";
 
 function is_dev_version()
 {
@@ -111,44 +114,8 @@ function put_file($match) {
 	return "?>\n$content" . (in_array($tokens[count($tokens) - 1][0], array(T_CLOSE_TAG, T_INLINE_HTML), true) ? "<?php" : "");
 }
 
-function lzw_compress($string) {
-	// compression
-	$dictionary = array_flip(range("\0", "\xFF"));
-	$word = "";
-	$codes = array();
-	for ($i=0; $i <= strlen($string); $i++) {
-		$x = @$string[$i];
-		if (strlen($x) && isset($dictionary[$word . $x])) {
-			$word .= $x;
-		} elseif ($i) {
-			$codes[] = $dictionary[$word];
-			$dictionary[$word . $x] = count($dictionary);
-			$word = $x;
-		}
-	}
-	// convert codes to binary string
-	$dictionary_count = 256;
-	$bits = 8; // ceil(log($dictionary_count, 2))
-	$return = "";
-	$rest = 0;
-	$rest_length = 0;
-	foreach ($codes as $code) {
-		$rest = ($rest << $bits) + $code;
-		$rest_length += $bits;
-		$dictionary_count++;
-		if ($dictionary_count >> $bits) {
-			$bits++;
-		}
-		while ($rest_length > 7) {
-			$rest_length -= 8;
-			$return .= chr($rest >> $rest_length);
-			$rest &= (1 << $rest_length) - 1;
-		}
-	}
-	return $return . ($rest_length ? chr($rest << (8 - $rest_length)) : "");
-}
-
-function put_file_lang() {
+function put_file_lang()
+{
 	global $lang_ids, $selected_languages;
 
 	$languages = array_map(function ($filename) {
@@ -181,7 +148,7 @@ function put_file_lang() {
 			}
 		}
 
-		$cases .= 'case "' . $language . '": $compressed = "' . add_quo_slashes(lzw_compress(json_encode($translation_ids, JSON_UNESCAPED_UNICODE))) . '"; break;';
+		$cases .= 'case "' . $language . '": $compressed = "' . add_quo_slashes(bzcompress(json_encode($translation_ids, JSON_UNESCAPED_UNICODE), 8)) . '"; break;';
 	}
 
 	$translations_version = crc32($cases);
@@ -190,7 +157,7 @@ function put_file_lang() {
 		function get_translations($lang) {
 			switch ($lang) {' . $cases . '}
 
-			return json_decode(lzw_decompress($compressed), true);
+			return json_decode(bzdecompress($compressed), true);
 		}
 
 		function get_plural_translation_id($key) {
@@ -283,7 +250,7 @@ function php_shrink($input) {
 	$output = '';
 	$in_echo = false;
 	$doc_comment = false; // include only first /**
-	for (reset($tokens); list($i, $token) = each($tokens); ) {
+	for (reset($tokens); list($i, $token) = each($tokens);) {
 		if (!is_array($token)) {
 			$token = array(0, $token);
 		}
@@ -291,8 +258,8 @@ function php_shrink($input) {
 			&& strlen(add_apo_slashes($tokens[$i+3][1])) < strlen($tokens[$i+3][1]) + 3
 		) {
 			$tokens[$i+2] = array(T_ECHO, 'echo');
-			$tokens[$i+3] = array(T_CONSTANT_ENCAPSED_STRING, "'" . add_apo_slashes($tokens[$i+3][1]) . "'");
-			$tokens[$i+4] = array(0, ';');
+			$tokens[$i + 3] = array(T_CONSTANT_ENCAPSED_STRING, "'" . add_apo_slashes($tokens[$i + 3][1]) . "'");
+			$tokens[$i + 4] = array(0, ';');
 		}
 		if ($token[0] == T_COMMENT || $token[0] == T_WHITESPACE || ($token[0] == T_DOC_COMMENT && $doc_comment)) {
 			$space = " ";
@@ -310,11 +277,11 @@ function php_shrink($input) {
 			} elseif ($token[0] == T_ECHO) {
 				$in_echo = true;
 			} elseif ($token[1] == ';' && $in_echo) {
-				if ($tokens[$i+1][0] === T_WHITESPACE && $tokens[$i+2][0] === T_ECHO) {
+				if ($tokens[$i + 1][0] === T_WHITESPACE && $tokens[$i + 2][0] === T_ECHO) {
 					next($tokens);
 					$i++;
 				}
-				if ($tokens[$i+1][0] === T_ECHO) {
+				if ($tokens[$i + 1][0] === T_ECHO) {
 					// join two consecutive echos
 					next($tokens);
 					$token[1] = ','; // '.' would conflict with "a".1+2 and would use more memory //! remove ',' and "," but not $var","
@@ -338,18 +305,19 @@ function php_shrink($input) {
 	return $output;
 }
 
-function minify_css($file) {
-	return lzw_compress(preg_replace('~\s*([:;{},])\s*~', '\1', preg_replace('~/\*.*\*/~sU', '', $file)));
+function minify_css($file)
+{
+	return bzcompress(preg_replace('~\s*([:;{},])\s*~', '\1', preg_replace('~/\*.*\*/~sU', '', $file)), 8);
 }
 
-function minify_js($file) {
-	if (function_exists('jsShrink')) {
-		$file = jsShrink($file);
-	}
-	return lzw_compress($file);
+function minify_js($file)
+{
+	$minifiedCode = \JShrink\Minifier::minify($file, array('flaggedComments' => false));
+	return bzcompress($minifiedCode, 8);
 }
 
-function compile_file($match) {
+function compile_file($match)
+{
 	global $project;
 	$file = "";
 	list(, $filenames, $callback) = $match;
@@ -490,7 +458,7 @@ if ($single_driver) {
 		}
 	}
 
-	$file = preg_replace('(;\.\./vendor/vrana/jush/modules/jush-(?!textarea\.|txt\.|js\.|' . preg_quote($single_driver == "mysql" ? "sql" : $single_driver) . '\.)[^.]+.js)', '', $file);
+	$file = preg_replace('(;\.\./building-tools/jush/modules/jush-(?!textarea\.|txt\.|js\.|' . preg_quote($single_driver == "mysql" ? "sql" : $single_driver) . '\.)[^.]+.js)', '', $file);
 	$file = preg_replace_callback('~doc_link\(array\((.*)\)\)~sU', function ($match) use ($single_driver) {
 		list(, $links) = $match;
 		$links = preg_replace("~'(?!(" . ($single_driver == "mysql" ? "sql|mariadb" : $single_driver) . ")')[^']*' => [^,]*,?~", '', $links);
@@ -501,8 +469,8 @@ if ($single_driver) {
 }
 
 if ($project == "editor") {
-	$file = preg_replace('~;\.\./vendor/vrana/jush/jush\.css~', '', $file);
-	$file = preg_replace('~compile_file\(\'\.\./(vendor/vrana/jush/modules/jush\.js|adminer/static/(?!cross)[^.]+\.gif)[^)]+\)~', "''", $file);
+	$file = preg_replace('~;\.\./building-tools/jush/jush\.css~', '', $file);
+	$file = preg_replace('~compile_file\(\'\.\./(building-tools/jush/modules/jush\.js|adminer/static/[^.]+\.gif)[^)]+\)~', "''", $file);
 }
 
 $file = preg_replace_callback("~lang\\('((?:[^\\\\']+|\\\\.)*)'([,)])~s", 'replace_lang', $file);
@@ -510,15 +478,15 @@ $file = preg_replace_callback('~\b(include|require) "([^"]*\$LANG.inc.php)";~', 
 
 $file = str_replace("\r", "", $file);
 $file = str_replace('<?php echo script_src("static/editing.js?" . filemtime("../adminer/static/editing.js")); ?>' . "\n", "", $file);
-$file = preg_replace('~\s+echo script_src\("\.\./vendor/vrana/jush/modules/jush-(textarea|txt|js|\$jush)\.js"\);~', '', $file);
-$file = str_replace('<link rel="stylesheet" type="text/css" href="../vendor/vrana/jush/jush.css">' . "\n", "", $file);
+$file = preg_replace('~\s+echo script_src\("\.\./building-tools/jush/modules/jush-(textarea|txt|js|\$jush)\.js"\);~', '', $file);
+$file = str_replace('<link rel="stylesheet" type="text/css" href="../building-tools/jush/jush.css">' . "\n", "", $file);
 $file = preg_replace_callback("~compile_file\\('([^']+)'(?:, '([^']*)')?\\)~", 'compile_file', $file); // integrate static files
 $replace = 'preg_replace("~\\\\\\\\?.*~", "", ME) . "?file=\1&version=' . substr(md5(microtime()), 0, 8) . '"';
 $file = preg_replace('~\.\./adminer/static/(favicon\.ico)~', '<?php echo h(' . $replace . '); ?>', $file);
 $file = preg_replace('~\.\./adminer/static/(default\.css)\?.*default.css"\);\s+\?>~', '<?php echo h(' . $replace . '); ?>', $file);
 $file = preg_replace('~"\.\./adminer/static/(functions\.js)\?".*functions.js"\)~', $replace, $file);
 $file = preg_replace('~\.\./adminer/static/([^\'"]*)~', '" . h(' . $replace . ') . "', $file);
-$file = preg_replace('~"\.\./vendor/vrana/jush/modules/(jush\.js)"~', $replace, $file);
+$file = preg_replace('~"\.\./building-tools/jush/modules/(jush\.js)"~', $replace, $file);
 $file = preg_replace("~<\\?php\\s*\\?>\n?|\\?>\n?<\\?php~", '', $file);
 $file = php_shrink($file);
 
