@@ -1,0 +1,28 @@
+{
+  "name": "adminerneo",
+  "version": "1.0.0",
+  "description": "AdminNeo ==========",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gildas-ld/adminerneo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/gildas-ld/adminerneo/issues"
+  },
+  "homepage": "https://github.com/gildas-ld/adminerneo#readme",
+  "dependencies": {
+    "bootstrap": "^5.3.3"
+  }
+}
