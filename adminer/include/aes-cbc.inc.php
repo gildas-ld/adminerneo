@@ -1,100 +1,89 @@
 <?php
 
 const ENCRYPTION_ALGO = 'aes-256-cbc';
+const HMAC_ALGO = 'sha512';
+const HMAC_KEY_SIZE = 32;
 
 /**
- * Generates a secure IV compatible with PHP 5 and PHP 7+.
+ * Generates a secure IV compatible with all PHP versions.
  *
- * @param int $length IV length.
- *
+ * @param  int $length IV length.
  * @return string Generated IV.
  */
 function generate_iv($length)
 {
-	if (function_exists('random_bytes')) {
-		try {
-			return random_bytes($length);
-		} catch (Exception $e) {
-			// Fallback to OpenSSL.
-		}
-	}
-
-	return openssl_random_pseudo_bytes($length);
+    if (function_exists('random_bytes')) {
+        try {
+            return random_bytes($length);
+        } catch (Exception $e) {
+            // Fallback to OpenSSL
+        }
+    }
+    return openssl_random_pseudo_bytes($length);
 }
 
 /**
- * Generates a 256-bit (32-byte) key from the SHA-512 hash.
+ * Generates a secure key from a passphrase using PBKDF2.
  *
- * @param $key
- *
- * @return string
+ * @param  string $key Input passphrase.
+ * @return string 32-byte derived key.
  */
 function hash_key($key)
 {
-	return substr(hash('sha512', $key, true), 0, 32);
+    return hash_pbkdf2('sha256', $key, 'secure_salt', 100000, 32, true);
 }
 
 /**
- * Encrypts a string using AES-256-CBC.
+ * Encrypts a string using AES-256-CBC and HMAC-SHA512.
  *
- * @param string $plaintext Plain text to encrypt.
- * @param string $key Encryption key.
- *
- * @return string|false Encrypted binary data or false.
+ * @param  string $plaintext Plain text input.
+ * @param  string $key       Encryption key.
+ * @return string|false Encrypted binary data or false on failure.
  */
 function aes_encrypt_string($plaintext, $key)
 {
-	$key = hash_key($key);
-	$iv = generate_iv(openssl_cipher_iv_length(ENCRYPTION_ALGO) ?: 16);
+    $key = hash_key($key);
+    $hmac_key = hash('sha256', $key . 'hmac', true);
+    $iv = generate_iv(openssl_cipher_iv_length(ENCRYPTION_ALGO));
 
-	// Encrypts the text using AES-256-CBC.
-	$ciphertext = openssl_encrypt($plaintext, ENCRYPTION_ALGO, $key, OPENSSL_RAW_DATA, $iv);
-	if ($ciphertext === false) {
-		return false;
-	}
+    $ciphertext = openssl_encrypt($plaintext, ENCRYPTION_ALGO, $key, OPENSSL_RAW_DATA, $iv);
+    if ($ciphertext === false) {
+        return false;
+    }
 
-	// Generates an HMAC using IV + ciphertext to ensure integrity.
-	$hmac = hash_hmac('sha512', $iv . $ciphertext, $key, true);
-
-	return $iv . $hmac . $ciphertext;
+    $hmac = hash_hmac(HMAC_ALGO, $iv . $ciphertext, $hmac_key, true);
+    return base64_encode($iv . $hmac . $ciphertext);
 }
 
 /**
- * Decrypts an AES-256-CBC encrypted string.
+ * Decrypts an AES-256-CBC encrypted string and verifies integrity using HMAC-SHA512.
  *
- * @param string $data Encrypted binary data.
- * @param string $key Decryption key.
- *
- * @return string|false Decrypted plain text or false.
+ * @param  string $data Base64-encoded encrypted data.
+ * @param  string $key  Decryption key.
+ * @return string|false Plain text or false if authentication fails.
  */
 function aes_decrypt_string($data, $key)
 {
-	$ivLength = openssl_cipher_iv_length(ENCRYPTION_ALGO) ?: 16;
+    $data = base64_decode($data);
+    if ($data === false) {
+        return false;
+    }
 
-	// IV (16) + HMAC (64) minimum
-	if ($data === false || strlen($data) < $ivLength + 64) {
-		return false;
-	}
+    $key = hash_key($key);
+    $hmac_key = hash('sha256', $key . 'hmac', true);
+    $ivLength = openssl_cipher_iv_length(ENCRYPTION_ALGO);
 
-	$key = hash_key($key);
+    if (strlen($data) < $ivLength + 64) {
+        return false;
+    }
 
-	// Extracts IV (16 bytes), HMAC (64 bytes), and encrypted text.
-	$iv = substr($data, 0, $ivLength);
-	$hmac = substr($data, $ivLength, 64);
-	$ciphertext = substr($data, $ivLength + 64);
+    $iv = substr($data, 0, $ivLength);
+    $hmac = substr($data, $ivLength, 64);
+    $ciphertext = substr($data, $ivLength + 64);
 
-	if ($iv === false || $hmac === false || $ciphertext === false) {
-		return false;
-	}
+    if (!hash_equals(hash_hmac(HMAC_ALGO, $iv . $ciphertext, $hmac_key, true), $hmac)) {
+        return false;
+    }
 
-	// Verifies integrity using HMAC-SHA512.
-	$calculated_hmac = hash_hmac('sha512', $iv . $ciphertext, $key, true);
-
-	// Protection against timing attacks.
-	if (!hash_equals($hmac, $calculated_hmac)) {
-		return false;
-	}
-
-	// Decrypts the text.
-	return openssl_decrypt($ciphertext, ENCRYPTION_ALGO, $key, OPENSSL_RAW_DATA, $iv);
+    return openssl_decrypt($ciphertext, ENCRYPTION_ALGO, $key, OPENSSL_RAW_DATA, $iv);
 }
