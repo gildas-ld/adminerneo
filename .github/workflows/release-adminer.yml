@@ -1,0 +1,47 @@
+name: Build and Release Adminer
+on:
+  push:
+    branches:
+      - main  
+  workflow_dispatch: 
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the repository
+        uses: actions/checkout@v4
+      - name: Install PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          extensions: pdo, json, openssl
+          tools: composer:v2
+      - name: Force Composer to use HTTPS
+        run: git config --global url."https://github.com/".insteadOf "git@github.com:"
+      - name: Installing dependencies with Composer
+        run: |
+          composer install --no-dev --prefer-dist --optimize-autoloader
+      - name: Extract the version from version.inc.php
+        id: extract_version
+        run: |
+          VERSION=$(grep -oP '\$VERSION\s*=\s*"\K[^"]+' adminer/include/version.inc.php)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "::set-output name=version::$VERSION"
+      - name: Run the compilation script
+        run: php compile.php mysql fr,en
+      - name: Check the export
+        run: |
+          if [ ! -f ./export/adminer-${{ env.VERSION }}-mysql.php ]; then
+            echo "Error: The exported file does not exist."
+            exit 1
+          fi
+      - name: Create a release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          body: "New version v${{ env.VERSION }} generated automatically."
+          files: ./export/adminer-${{ env.VERSION }}-mysql.php
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
