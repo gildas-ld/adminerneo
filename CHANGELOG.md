@@ -1,6 +1,18 @@
 Changelog
 =========
 
+AdminNeo 4.17.1
+---------------
+
+### Bugfixes
+
+- MySQL: Fix displaying empty text as a default value
+- MySQL: Fix setting the default value of text and json fields
+- MySQL: Display default values of binary columns (by @vrana)
+- MySQL: Convert binary default value to hex when editing (by @vrana)
+- MariaDB: Fix using "NULL" text as a default value of nullable column (issue #82)
+- PostgreSQL PDO: Escape bytea values (by @vrana)
+
 AdminNeo 4.17
 -------------
 

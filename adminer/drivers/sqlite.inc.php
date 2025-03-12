@@ -76,7 +76,7 @@ if (isset($_GET["sqlite"]) || isset($_GET["sqlite2"])) {
 					);
 				}
 
-				function __desctruct() {
+				function __destruct() {
 					return $this->_result->finalize();
 				}
 			}

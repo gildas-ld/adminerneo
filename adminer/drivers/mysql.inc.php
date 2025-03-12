@@ -588,35 +588,42 @@ if (isset($_GET["mysql"])) {
 			$type = $row["COLUMN_TYPE"];
 			// https://mariadb.com/kb/en/library/show-columns/, https://github.com/vrana/adminer/pull/359#pullrequestreview-276677186
 			$generated = preg_match('~^(VIRTUAL|PERSISTENT|STORED)~', $row["EXTRA"]);
-			preg_match('~^([^( ]+)(?:\((.+)\))?( unsigned)?( zerofill)?$~', $type, $match);
+			preg_match('~^([^( ]+)(?:\((.+)\))?( unsigned)?( zerofill)?$~', $type, $type_matches);
 
-			$default = $row["COLUMN_DEFAULT"];
-			$is_text = preg_match('~text~', $match[1]);
+			$default = $maria && $row["COLUMN_DEFAULT"] == "NULL" ? null : $row["COLUMN_DEFAULT"];
+			if ($default !== null) {
+				$is_text = preg_match('~(text|json)~', $type_matches[1]);
 
-			// MariaDB: texts are escaped with slashes, chars with double apostrophe.
-			// MySQL: default value a'b of text column is stored as _utf8mb4\'a\\\'b\'.
-			if (!$maria && $is_text) {
-				$default = preg_replace("~^(_\w+)?('.*')$~", '\2', stripslashes($default));
-			}
-			if ($maria || $is_text) {
-				$default = preg_replace_callback("~^'(.*)'$~", function ($match) {
-					return str_replace("''", "'", stripslashes($match[1]));
-				}, $default);
+				// MariaDB: texts are escaped with slashes, chars with double apostrophe.
+				// MySQL: default value a'b of text column is stored as _utf8mb4\'a\\\'b\'.
+				if (!$maria && $is_text) {
+					$default = preg_replace("~^(_\w+)?('.*')$~", '\2', stripslashes($default));
+				}
+				if ($maria || $is_text) {
+					$default = preg_replace_callback("~^'(.*)'$~", function ($matches) {
+						return str_replace("''", "'", stripslashes($matches[1]));
+					}, $default);
+				}
+
+				// MySQL: Convert binary default value.
+				if (!$maria && preg_match('~binary~', $type_matches[1]) && preg_match('~^0x(\w*)$~', $default, $matches)) {
+					$default = pack("H*", $matches[1]);
+				}
 			}
 
 			$return[$field] = array(
 				"field" => $field,
 				"full_type" => $type,
-				"type" => $match[1],
-				"length" => $match[2],
-				"unsigned" => ltrim($match[3] . $match[4]),
+				"type" => $type_matches[1],
+				"length" => $type_matches[2],
+				"unsigned" => ltrim($type_matches[3] . $type_matches[4]),
 				"default" => ($generated
 					? ($maria ? $row["GENERATION_EXPRESSION"] : stripslashes($row["GENERATION_EXPRESSION"]))
-					: ($default != "" || preg_match("~char|set~", $match[1]) ? $default : null)
+					: $default
 				),
 				"null" => ($row["IS_NULLABLE"] == "YES"),
 				"auto_increment" => ($row["EXTRA"] == "auto_increment"),
-				"on_update" => (preg_match('~\bon update (\w+)~i', $row["EXTRA"], $match) ? $match[1] : ""), //! available since MySQL 5.1.23
+				"on_update" => (preg_match('~\bon update (\w+)~i', $row["EXTRA"], $type_matches) ? $type_matches[1] : ""), //! available since MySQL 5.1.23
 				"collation" => $row["COLLATION_NAME"],
 				"privileges" => array_flip(explode(",", $row["PRIVILEGES"])) + ["where" => 1, "order" => 1],
 				"comment" => $row["COLUMN_COMMENT"],

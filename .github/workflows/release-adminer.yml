@@ -32,7 +32,7 @@ jobs:
         run: php compile.php mysql,pgsql,sqlite fr,en
       - name: Check the export
         run: |
-          FILE=$(ls export/adminer-${{ env.VERSION }}*.php | head -n 1)
+          FILE=$(ls export/adminer*.php | tail -n 1)
           if [ -z "$FILE" ]; then
             echo "The exported file does not exist."
             exit 1

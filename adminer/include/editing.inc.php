@@ -300,6 +300,7 @@ function process_field($field, $type_field) {
 */
 function default_value($field) {
 	global $jush;
+
 	$default = $field["default"];
 	if ($default === null) return "";
 
@@ -308,7 +309,12 @@ function default_value($field) {
 	}
 
 	if (preg_match('~char|binary|text|enum|set~', $field["type"]) || preg_match('~^(?![a-z])~i', $default)) {
-		return " DEFAULT " . q($default);
+		// MySQL requires () around default value of text and json column.
+		if ($jush == "sql" && preg_match('~text|json~', $field["type"])) {
+			return " DEFAULT (" . q($default) . ")";
+		} else {
+			return " DEFAULT " . q($default);
+		}
 	} else {
 		// MariaDB exports CURRENT_TIMESTAMP as a function.
 		$default = str_ireplace("current_timestamp()", "CURRENT_TIMESTAMP", $default);

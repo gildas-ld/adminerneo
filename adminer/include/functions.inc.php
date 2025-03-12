@@ -1516,6 +1516,9 @@ function edit_form($table, $fields, $row, $update) {
 				if ($field["type"] == "bit" && preg_match("~^b'([01]*)'\$~", $default, $regs)) {
 					$default = $regs[1];
 				}
+				if ($jush == "sql" && preg_match('~binary~', $field["type"])) {
+					$default = bin2hex($default); // same as UNHEX
+				}
 			}
 			$value = ($row !== null
 				? ($row[$name] != "" && $jush == "sql" && preg_match("~enum|set~", $field["type"])
